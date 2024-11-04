@@ -1,0 +1,588 @@
+---
+title: "Manipulating and visualizing data part 1"
+output: pdf_document
+author:
+  - based on a lesson by [Carl Boettiger](https://ourenvironment.berkeley.edu/people/carl-boettiger), modified by L. Ponisio 
+---
+```{r, setup, message=FALSE}
+library("tidyverse")
+```
+
+# Lesson Overview
+
+## Conservation/ecology Topics 
+
+> - Become familiar with the primary data sources and evidence for global warming
+
+## Computational Topics
+
+> - Learn to discover and interpret essential metadata about how measurements are made
+> - Interpret Data provenance, "Raw" and "Derived" data
+> - Think about measurement uncertainty, resolution, and missing values in context of environmental science data
+> - Reading in data from the web into the R.
+> - Become familiar with variations in CSV / tabular data formats and how to handle them
+> - Encountering missing data
+> - Working with dates and date-time objects
+> - Plotting timeseries data
+> - Subsetting, reshaping data
+
+## Statistical Topics
+
+> - Interpret data visualizations
+> - Explore noise vs seasonality vs trends
+> - Understand the use of windowed averages
+
+-------------------------------
+
+# Evidence for Global Climate Change
+
+In this module, we will explore several of the most significant data sources on global climate change.  An introduction to these data sources can be found at NASA's Climate Vital Signs website, <http://climate.nasa.gov/vital-signs>
+
+ We will begin by examining the carbon dioxide record from the Mauna Loa Observatory.
+
+## Why C02?
+
+Carbon dioxide (CO2) is an important heat-trapping (greenhouse) gas, which is released through human activities such as deforestation and burning fossil fuels, as well as natural processes such as respiration and volcanic eruptions.
+
+# Parsing tabular data
+
+One of the most common formats we will interact with is tabular data. Tabular data is often presented in *plain text*, which is not as simple as it sounds, (as we shall see in a moment).  NASA points us to a raw data file maintained by NOAA on one of it's FTP servers: <ftp://aftp.cmdl.noaa.gov/products/trends/co2/co2_mm_mlo.txt> .
+
+So, where does this data come from? How does one measure atmospheric CO2 levels anyway?
+
+# Data Provenance
+
+Knowing where our data come from and how values are measured is essential to proper interpretation of the results.  Data scientists usually speak of *raw data* and *derived data*, but the intepretation of these terms is always relative.  Typically *raw* simply means "the data I started with" and *derived* "the data I produced."  Thus our "raw" data is almost always someone else's "derived" data, and understanding how they got to it can provide important insights to our analysis.  One of the first questions we should ask of any data is "where does it come from?"
+
+In particular, we usually want to make note of three things:
+
+- 1. What is the uncertainty in the data?
+- 2. What is the resolution of the data?
+- 3. What do missing values mean?
+
+## 1.  What is the uncertainty in the data?
+
+Almost all measurements come with some degree of uncertainty, or measurement error.  Often we will not be able to know this precisely. Rather, we seek a a qualtiative understanding of the measurement process to give us some idea of the relative importance of errors in the measurement process influencing the value.  We may later be able to infer a more precise description of measurement error from the data itself, but this will always require assumptions about both the data-generating process itself.
+
+## 2. What is the resolution of the data?
+
+Derived data often summarize raw data in some way.  For instance, global climate data is frequently reported as monthly or even annual averages, even though the raw data may be collected day by day, or even minute by minute.  Data may be averaged over space as well as time, such as weather measurements made in at separate stations.  Weighted averages and more complex techniques are often used as well.
+
+## 3. What do missing values mean?
+
+Real world data almost always has missing values.  Here, it is important we try to understand *why* values are missing so we know how to handle them appropriately.  If there is a systematic reason behind why data are missing (say, days where snowfall or storms made the weather station inaccessible) they could bias our analysis (underestimating extreme cold days, say).  If data are missing for an unrelated reason (the scientist is sick, or the instrument fails) then we may be more justified in simply ommitting the data.  Often we cannot know the exact reason certain data are missing and this is just something we must keep in mind as a caveat to our infererence. Frequently our results will be independent of missing data, and sometimes missing data can be accurately inferred from the data that is available.
+
+# Measuring C02 levels
+
+So how *are* atmospheric CO2 levels measured?
+
+Researchers shine an infrared light source of a precise intensity through dry air in a container of precisely controlled volume & pressure, ensuring a consistent number of atoms in the chamber. CO2 absorbs some of this radiation as it passes through the chamber, and then a sensor on the opposite end measures the radiation it receives, allowing researchers to calculate the amount absorbed and infer the CO2 concentration.  The data are reported in parts per million (ppm), a count of the number of CO2 molecules per million molecules of dry air.  These calculations are calibrated by comparing against chambers that are prepared using known concentrations of CO2.  For more information, see [NOAA documentation](http://www.esrl.noaa.gov/gmd/ccgg/about/co2_measurements.html).
+
+## Measurement uncertainty:
+
+Importantly, the measurement error introduced here is rather small, roughly 0.2 ppm.  As we shall see, many other factors, such as local weather and seasonal variation also influence the measurement, but the measurement process itself is reasonably precise.  As we move to other sources of data these measurement errors can become much more significant.
+
+## Resolution:
+
+What is the resolution of the CO2 data? Already we see our data are not the actual "raw" measurements the researchers at Mauna Loa read off their instruments each day, but have been reported as monthly averages.
+
+## Missing values:
+
+The last column of the data set tells us for how many days that month researchers collected data.  We see that they only started keeping track of this information in 1974, but have since been pretty diligent -- collecting data almost every day of the month (no breaks for weekends here!  What do you think accounts for the gaps?  How might you test your hypothesis?  Would these introduce bias to the monthly averages? Would that bias influence your conclusion about rising CO2 levels?)
+
+Spatially our Mauna Loa data has no aggregation -- the data is collected at only one location.  How might the data differ if it were aggregated from stations all over the globe?
+
+# Importing Data
+
+<blockquote class="twitter-tweet" lang="en"><p lang="en" dir="ltr">In Data Science, 80% of time spent prepare data, 20% of time spent complain about need for prepare data.</p>&mdash; Big Data Borat (@BigDataBorat) <a href="https://twitter.com/BigDataBorat/status/306596352991830016">February 27, 2013</a></blockquote>
+
+Our first task is to read this data into our R environment.  To this, we will use the `read.csv` function. Reading in a data file is called *parsing*, which sounds much more sophisticated.  For good reason too -- parsing different data files and formats is a cornerstone of all pratical data science research, and can often be the hardest step.
+
+So what do we need to know about this file in order to read it into R?
+
+```{r, render=print}
+## Let's try: 
+co2.test <- read.csv("ftp://aftp.cmdl.noaa.gov/products/trends/co2/co2_mm_mlo.txt")
+head(co2.test)
+
+```
+
+hmm... what a mess.  Let's try defining the comment symbol:
+```{r, render=print}
+co2.test2 <- read.csv("ftp://aftp.cmdl.noaa.gov/products/trends/co2/co2_mm_mlo.txt", comment = "#")
+head(co2.test2)
+```
+
+Getting there, but not quite done. Our first row is being interpreted as column names.  The documentation also notes that certain values are used to indicate missing data, which we would be better off converting to explicitly missing so we don't get confused.
+
+Seems like we need a more flexible way to load in the data to avoid further suffering. Let's try `readr::read_table` from `tidyverse` 
+
+```{r}
+
+co2 <- read_table("ftp://aftp.cmdl.noaa.gov/products/trends/co2/co2_mm_mlo.txt", 
+                  comment = "#",
+                  col_names = c("year", "month", "decimal_date", 
+                                "average", "interpolated", "trend",  "stdev_days", "uncertainty_average"),
+                  col_types = c("iidddidd"),
+                  na = c("-1", "-99.99", "-9.99", "-0.99"))
+co2
+```
+
+Success! We have read in the data. Celebrate!
+
+# Plotting Data with `ggplot`
+
+Effective visualizations are an integral part of data science, poorly organized or poorly labelled figures can be as much a source of peril as understanding.  Nevertheless, the ability to generate plots quickly with minimal tinkering is an essential skill.  As standards for visualizations have increased, too often visualization is seen as an ends rather than a means of data analysis. See [Fox & Hendler (2011)](http://science.sciencemag.org/content/331/6018/705.short) for more discussion of this.
+
+```{r}
+ggplot(co2, aes(decimal_date, average)) + geom_line()
+```
+
+## Alternative: Plotting Data with base R (no packages needed)
+If you want to plot something quickly without loading any packages. 
+
+```{r}
+plot(y=co2$average, x=co2$decimal_date, type="l")
+```
+
+But... it isn't quite as pretty as with ggplot. :/ 
+
+## Plotting multiple series
+
+We often would like to plot several data values together for comparison,
+for example the average, interpolated and trend $CO_2$ data. We can do
+this in three steps:
+
+1) subsetting the dataset to the columns desired for plotting
+
+```{r}
+co2_sub <- co2 %>%
+  select(decimal_date, average, interpolated, trend)
+head(co2_sub)
+```
+
+
+2) rearranging the data into a "long" data table where the data values
+are stacked together in one column and there is a separate column that
+keeps track of whether the data came from the average,
+interpolated, or trend column. Notice by using the same name,
+we overwrite the original co2_sub
+
+
+```{r}
+co2_sub <- co2_sub %>%
+  pivot_longer(!decimal_date, names_to = "series", values_to = "ppmv")
+
+co2_sub
+```
+
+3) Visualize the data using a line plot
+
+```{r}
+ggplot(co2_sub, aes(decimal_date, ppmv, col=series)) + geom_line()
+```
+
+Or we can take advantage of dplyr's nifty pipping abilities and
+accomplish all of these steps in one block of code. Beyond being more
+succinct, this has the added benefit of avoiding creating a new object
+for the subsetted data.
+
+```{r fig.height=3}
+co2 %>%
+  select(decimal_date, average, interpolated, trend) %>%
+  gather(series, ppmv, -decimal_date) %>%
+  ggplot(aes(decimal_date, ppmv, col = series)) +  geom_line()
+```
+
+## What do we see?
+
+Our "Figure 1" shows three broad patterns:
+
+- A trend of steadily increasing CO2 concentration from 1950 to 2015
+- Small, regular seasonal oscillation is visible in the data
+- Increase appears to be accelerating (convex curve)
+
+# Understanding moving averages
+
+## Trend, cycle, or noise?
+
+> "Climate is what you expect, weather is what you get"
+
+Present-day climate data is often sampled at both finer temporal and spatial scales than we might be interested in when exploring long-term trends.  More frequent sampling can reveal higher-frequency trends, such as the seasonal pattern we observe in the CO2 record.  It can also reveal somewhat greater variability, picking up more random (stochastic) sources of variation such as weather patterns.
+
+To reveal long term trends it is frequently valuable to average out this high-frequency variation.  We could spend the whole course discussing ways such averaging or smoothing can be done, but instead we'll focus on the most common methods you will see already present in the climate data we examine.  The monthly record data we analyze here already shows some averaging.  
+
+## Moving averages
+
+```{r}
+# install.packages("RcppRoll")
+library(RcppRoll)
+co2 <- co2 %>%
+ mutate(annual = RcppRoll::roll_mean(average,
+                                     n=12L,
+                                     align = "left",
+                                     fill = NA,
+                                     na.rm=TRUE,
+                                     normalize=FALSE))
+
+head(co2)
+```
+
+```{r}
+co2 %>% ggplot(aes(decimal_date)) +
+  geom_line(aes(y=average), col="blue") +
+  geom_line(aes(y=annual), col="red")
+```
+
+# Lab 2: Exploring and visualizing more data realted to global climate change. 
+
+# Part 1: Temperature Data
+
+Each of the last years has consecutively set new records on global climate.  In this section we will analyze global mean temperature data.
+
+Data from: <http://climate.nasa.gov/vital-signs/global-temperature>
+
+## Question 1:
+
+a. Describe the data set. You can do additional searches to learn more about the data given the description on the data page is not detailed. 
+-- ANSWER: This graph shows the change in global surface temperature compared to the long-term average from 1951 to 1980.
+
+b. Describe what kind of column each data contains and what units it is measured in. 
+-- ANSWER: Year (integer), month (integer), decimal date (decimal), average (decimal), interpolated (decimal), trend (integer), stdev_days(decimal), uncertainty_avg (integer), annual(decimal)
+
+Then address our three key questions in understanding this data:
+c. How are the measurements made? What is the associated measurement uncertainty?
+-- ANSWER: Average, interpolated, trend, and annula are measured in $\Delta$ ºC. Uncertainty is measured in stdev_days and uncertainty_avg probably has no units that have meaning. 
+
+d.  What is the resolution of the data?
+-- ANSWER: The temperature measurements are taken yearly.
+
+e. Are there missing values? How should they be handled?
+-- ANSWER: Many of the values are 'NA' for trend, stdev_days, and uncertainty_avg. They may need to be deleted or filled in with a default value.
+
+## Question 2:
+
+Construct the necessary R code to import and prepare for manipulation the following [dataset](https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt) You may wish to re-label the columns to something easier to read/understand. 
+Call your data 'temp'
+
+HINT: you will need to use the arguments skip and na, and my wish to use col_names and col_types. 
+
+```{r}
+library(readr)
+
+# Define the URL for the dataset
+url <- "https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt"
+
+# Read the dataset
+temp <- read_table(url,
+                   skip = 5, # Skip the first 5 lines (header information)
+                   na = "***", # Handle missing values represented by '***'
+                   col_names = c("Year", "No_Smoothing", "Lowess_Smoothing"), # Rename columns
+                   col_types = c("idd")
+                   )
+
+# View the first few rows of the dataset
+head(temp)
+```
+
+## Question 3:
+
+a. Plot the trend in global mean temperatures over time.  
+```{r}
+library(ggplot2)
+
+ggplot(data = temp, aes(x = Year, y = delta_ºC)) + 
+  # Line for the 'No smoothing'
+  geom_line(aes(y = No_Smoothing, color = "No Smoothing"), size = 1) + 
+  # Line for the "smoothing" - make it dashed for clarity
+  geom_line(aes(y = Lowess_Smoothing, color = "Lowess Smoothing"), size = 1, linetype = "dashed")
+```
+
+b. Describe what you see in the plot and how you interpret the patterns you observe.
+-- ANSWER: I See a steep increase in the change in temperature after the year 1980ish.
+
+
+## Question 4: Evaluating the evidence for a "Pause" in warming?
+
+The [2013 IPCC Report](https://www.ipcc.ch/pdf/assessment-report/ar5/wg1/WG1AR5_SummaryVolume_FINAL.pdf) included a tentative observation of a "much smaller increasing trend" in global mean temperatures since 1998 than was observed previously.  This led to much discussion in the media about the existence of a "Pause" or "Hiatus" in global warming rates, as well as much research looking into where the extra heat could have gone.  (Examples discussing this question include articles in [The Guardian](http://www.theguardian.com/environment/2015/jun/04/global-warming-hasnt-paused-study-finds), [BBC News](http://www.bbc.com/news/science-environment-28870988), and [Wikipedia](https://en.wikipedia.org/wiki/Global_warming_hiatus)). 
+
+a. By examining the data here, what evidence do you find or not find for such a pause?  Present an written/graphical analysis of this data (using the tools & methods we have covered so far) to argue your case.  
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Get the data from 1983 to 1997
+early_data <- temp[(temp$Year >= 1983) & (temp$Year <= 1997), ]
+normalized_early <- early_data %>% mutate(YearBin = row_number())
+
+# Get the data from 1998 to 2013
+recent_data <- temp[(temp$Year >= 1998) & (temp$Year <= 2013), ]
+normalized_recent <- recent_data %>% mutate(YearBin = row_number())
+
+# Combine both dataframes
+combined_data <- bind_rows(
+  normalized_early %>% mutate(Period = "Early"),
+  normalized_recent %>% mutate(Period = "Recent")
+)
+
+# Graph both early and recent data
+ggplot(data = combined_data, aes(x = YearBin)) + 
+  # Lines for early data
+  geom_line(aes(y = No_Smoothing, color = "Early - No Smoothing"), data = normalized_early, size = 1) + 
+  geom_line(aes(y = Lowess_Smoothing, color = "Early - Lowess Smoothing"), data = normalized_early, size = 1, linetype = "dashed") +
+  
+  # Lines for recent data
+  geom_line(aes(y = No_Smoothing, color = "Recent - No Smoothing"), data = normalized_recent, size = 1) + 
+  geom_line(aes(y = Lowess_Smoothing, color = "Recent - Lowess Smoothing"), data = normalized_recent, size = 1, linetype = "dashed")
+  
+```
+ -- ANSWER: The more recent data follows a very similar trend as the earlier data, but at a consistently higher degrees C change. So, it appears that there is no pause. It seems like the rapid decrease in annual temperature in 1998 was just a mroe extreme fluctuation than other years, but the overall trend didn't change.
+
+b. What additional analyses or data sources would better help you refine your arguments?
+
+-- ANSWER: If we could actually determine the rate of change for both time periods, we could definitively say if the rate of change in temperature change is increasing or staying steady during 1998.
+
+## Question 5: Rolling averages
+    
+a. What is the meaning of "5 year average" vs "annual average"?
+--- ANSWER: The 5 year average is the average for a given 5 year period that the given year falls in, while an annual average is that year's average temperature change.
+
+b. Construct 5 year averages from the annual data.  Construct 10 & 20-year averages. Plot the different averages and describe what differences you see and why.  
+
+```{r}
+co2
+```
+
+```{r}
+# Handling NA values: co2$annual already has NAs, we'll deal with them
+co2 <- co2 %>% filter(!is.na(annual))
+
+# 5-year rolling averages
+co2 <- co2 %>% 
+  mutate(FiveYrAvg = roll_mean(annual, 5, fill = NA, align = "right"))
+
+# 10-year rolling averages
+co2 <- co2 %>% 
+  mutate(TenYrAvg = roll_mean(annual, 10, fill = NA, align = "right"))
+
+# 20-year rolling averages
+co2 <- co2 %>% 
+  mutate(TwentyYrAvg = roll_mean(annual, 20, fill = NA, align = "right"))
+
+co2
+```
+
+
+
+```{r}
+## plot
+
+ggplot(co2, aes(x = decimal_date)) +
+  geom_line(aes(y = annual, color = "Annual CO2")) +
+  geom_line(aes(y = FiveYrAvg, color = "5-Year Average")) +
+  geom_line(aes(y = TenYrAvg, color = "10-Year Average")) +
+  geom_line(aes(y = TwentyYrAvg, color = "20-Year Average")) +
+  labs(title = "CO2 Annual Data and Moving Averages",
+       x = "Year",
+       y = "CO2 Concentration (ppm)") +
+  scale_color_manual(values = c("Annual CO2" = "black", 
+                                "5-Year Average" = "blue", 
+                                "10-Year Average" = "green", 
+                                "20-Year Average" = "red"))
+
+```
+
+-- ANSWER: The 20 year average is always below the 10, 5, and annual averages. The more historical data you include in the average window, the lower the average will be since the CO2 concentration was much lower in 1960, for example.
+
+# Lab Part 2: Melting Ice Sheets?
+
+- Data description: <http://climate.nasa.gov/vital-signs/land-ice/>
+- Raw data file: <http://climate.nasa.gov/system/internal_resources/details/original/499_GRN_ANT_mass_changes.csv>
+
+## Question 1:
+
+a. Describe the data set: what are the columns and units? Where do the numbers come from? 
+
+ANSWER: The columns are year in decimal form (to account for the month of the year), Greenland mass, and Antarctica mass both measured in Gt (gigatons?).
+
+b.  What is the uncertainty in measurement? Resolution of the data? Interpretation of missing values?
+
+ANSWER: 
+- Uncertainty: The uncertainty in measurements of ice mass is related to corrections and model adjustments for factors such as the GIA (Glacial Isostatic Adjustment).
+
+- Resolution: The data is collected and recorded approximately monthly, but some gaps exist in the dates, indicating that the actual measurement interval may vary slightly.
+
+- Missing data: On the graph, missing data is simply represented with a gap. There doesn't appear to be any sort of NA / NULL / None values in the actual dataset.
+
+## Question 2:
+
+Construct the necessary R code to import this data set as a tidy `Table` object. HINT: you will need to use the argument "skip". Call your data 'icesheets'
+```{r}
+## Download the data to the same folder this file is in. Get in the habit using for computer's file directory system to organize your work.
+## check your working directory!
+
+icesheets <- read_csv("2_lab_climate.csv", skip = 9, col_types = 'ddd')
+
+# Check the imported data
+head(icesheets)
+
+```
+
+## Question 3:
+
+Plot the data and describe the trends you observe.
+
+```{r}
+ggplot(icesheets, aes(x = `TIME (year.decimal)`)) +
+  geom_line(aes(y = `Greenland mass (Gt)`, color = "Greenland mass (Gt)")) +
+  geom_line(aes(y = `Antarctica mass (Gt)`, color = "Antarctica mass (Gt)")) +
+  labs(x = "Time (year)", y = "Land mass (Gt)")
+```
+ANSWER: Greenland is melting at a faster rate than Antarctica.
+
+Isn't this fun?! 
+
+# Lab Part 3: Rising Sea Levels?
+
+- Data description: <http://climate.nasa.gov/vital-signs/sea-level/>
+- Raw data file: <http://climate.nasa.gov/system/internal_resources/details/original/121_Global_Sea_Level_Data_File.txt>
+
+## Question 1:
+
+- Altimeter type (0 or 999): Identifies the altimeter system used for the measurement (0 = dual-frequency; 999 = single-frequency).
+- Merged file cycle number: Represents the cycle of measurements collected from different satellite missions.
+- Year + fraction of year (mid-cycle): The time of measurement in year and fractional year format.
+- Number of observations: The number of satellite observations taken during the cycle.
+- Number of weighted observations: Weighted number of observations after adjustments.
+- GMSL variation: The variation in global mean sea level without GIA applied, measured in millimeters (mm).
+- Standard deviation of GMSL: Standard deviation of the GMSL variation estimate without GIA (mm).
+- Smoothed GMSL variation (mm): Smoothed variation without GIA (Gaussian filter, 60 days).
+- GMSL variation (mm, GIA applied): The variation in GMSL with the Global Isostatic Adjustment (GIA) applied.
+- Standard deviation of GMSL (GIA applied): Standard deviation of the GMSL variation estimate with GIA applied.
+- Smoothed GMSL variation (mm, GIA applied): Smoothed variation with GIA applied (Gaussian filter, 60 days).
+- Smoothed GMSL variation with annual and semi-annual signals removed (mm): The smoothed GMSL with GIA applied, further filtered to remove seasonal effects (annual and semi-annual signals).
+
+b. Where do these data come from (try googling if the description isn't satisfactory)?
+
+The data come from NASA’s Goddard Space Flight Center. The GMSL variations are computed using satellite altimetry data from missions and are processed to remove inter-mission gaps. The dataset is provided by the Physical Oceanography Distributed Active Archive Center.
+
+c. What is the uncertainty in measurement? Resolution of the data? Interpretation of missing values?
+
+Uncertainty:
+The uncertainty is represented by the standard deviation columns for both GIA and non-GIA applied GMSL variations. These indicate the variability in the GMSL estimates, which comes from satellite measurement errors.
+
+Resolution:
+The 'time' column provides values as fractions of a year, with measurements taken roughly every 10 to 20 days.
+
+Missing data:
+Missing values in the dataset are marked by the flag 99900.000, which is likely used to denote times when satellite measurements were not available or failed, or due to a gap between missions.
+
+## Question 2:
+
+Construct the necessary R code to import this data set as a tidy `Table` object. Call your data 'sealevel'
+```{r}
+cols <- c('altimeter_type', 
+         'merged_file_cycle', 
+         'year_fraction', 
+         'num_observations', 
+         'num_weighted_observations', 
+         'GMSL_no_GIA', 
+         'std_dev_GMSL_no_GIA', 
+         'smoothed_GMSL_no_GIA', 
+         'GMSL_GIA_applied', 
+         'std_dev_GMSL_GIA_applied', 
+         'smoothed_GMSL_GIA_applied', 
+         'smoothed_GMSL_GIA_annual_removed')
+
+sealevel <- read_table("121_Global_Sea_Level_Data_File.txt", 
+                       skip = 45,
+                       col_names = cols,
+                       col_types = 'iididddddddd')
+
+# Check the imported data
+head(sealevel)
+
+```
+
+
+## Question 3:
+
+a. Plot the data.
+
+```{r}
+ggplot(sealevel, aes(x = `year_fraction`)) +
+  geom_line(aes(y = `GMSL_no_GIA`, color = "GMSL_no_GIA")) +
+  geom_line(aes(y = `GMSL_GIA_applied`, color = "GMSL_GIA_applied")) +
+  labs(x = "Time (year)", y = "Global Mean Sea Level (mm)")
+```
+a. Describe the trends you observe.
+ANSWER: Global mean sea level is steadily going up since NASA began recording the data in 1993, regardless of the adjustment being applied or not applied. It seems that the GMSL might be increasing more steeply in the more recent data around 2017. It would be good to look at the change in the average slope in the more recent data to determine if this is true or not actually significant.
+
+# Exploring Seasonal Oscillations (Demo for W)
+
+Circling back to our CO2 data from Mauna Loa, let's practice summarizing our data in different ways. 
+
+```{r}
+# Create a new column for season
+co2 <- co2 %>%
+  mutate(season = case_when(
+    month %in% c(12, 1, 2) ~ "Winter",
+    month %in% c(3, 4, 5) ~ "Spring",
+    month %in% c(6, 7, 8) ~ "Summer",
+    month %in% c(9, 10, 11) ~ "Fall"
+  ))
+
+# Summarize average CO2 levels by season
+seasonal_avg <- co2 %>%
+  group_by(season) %>%
+  summarize(average_CO2 = mean(average, na.rm = TRUE))
+
+# Print the summarized data
+print(seasonal_avg)
+
+# Plot to demonstrate seasonal variation
+ggplot(co2, aes(x = year, y = average, color = season)) +
+  geom_line() +
+  labs(y = "Average Monthly CO2 Levels", x = "Year", color = "Season")
+
+# Find the maximum and minimum months
+max_month <- seasonal_avg %>% filter(average_CO2 == max(average_CO2))
+min_month <- seasonal_avg %>% filter(average_CO2 == min(average_CO2))
+
+# Print max and min months
+max_month
+min_month
+``` 
+- Demonstrate that the periodic behavior truly is seasonal - look at ggplot graph
+- What month is the maximum? What is the minimum?
+- What do you think could explain the seasonal cycle observed here?
+
+The highest month is 5 (May), and the lowest month is 9 (September). This can be explained by the patterns of carbon dioxide release and photosyntehsis. During May / Spring in general, plants are just beginning to come out of their winter dormancy and the CO2 has built up over the winter. Then during summer plants are photosynthesizing, and finally when fall arrives, a lot of CO2 has been absorbed all spring and summer, so it makes sense that the lowest month would be during September, the very start of fall.
+
+# Lab Part 4: Summarize the data of your choice. 
+
+Using any of the datasets from this demo/lab (co2, icesheets, temp etc.) come up with an interesting question to ask that necessitates you to summarize the data in some way, make a visualization, and answer your question. 
+
+a. What dataset are you using? What is your question?
+I am going to use icesheets and ask: Recently (ish), are the two area's masses diverging in their rate of loss of mass?
+
+b. Summarize your data to answer your question. 
+```{r}
+icesheets_recent <- icesheets %>%
+  filter((`TIME (year.decimal)` >= 2008) & (`TIME (year.decimal)` < 2015))
+
+summary(icesheets_recent)
+```
+
+c. Plot your data
+```{r}
+ggplot(icesheets_recent, aes(x = `TIME (year.decimal)`)) + 
+  geom_line(aes(y = `Greenland mass (Gt)`, color = "Greenland")) + 
+  geom_line(aes(y = `Antarctica mass (Gt)`, color = "Antarctica")) +
+  labs(y = "Mass (Gt)", x = "Year", color = "Location")
+
+```
+
+d. Interpret you plot. What is the answer to your question?
+It looks like Antarctica might be melting slower and may be stabilizing somewhat, while Greenland's rate of land loss is rapid. From abotu 2008 to 2010, the two appeared to have similar masses and were even melting at similar rates. After 2011, we see the divergence. The average for Greenland during this time period is -805, but is -395 for Antarctica, showing that Greenland lost abotu twice as much land in this 6 year period. 
