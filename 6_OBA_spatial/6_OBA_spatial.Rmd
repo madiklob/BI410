@@ -1,0 +1,258 @@
+---
+title: "Exploring bee-related spatial data"
+output: pdf_document
+author:
+  - Lauren Ponisio
+---
+
+<!-- Lesson Overview -->
+
+# Conservation/ecology Topics 
+
+> - Species distributions 
+
+# Computational Topics
+> -  Convert a data frame to a spatial object.
+> -  Plot multiple spatial layers.
+
+-------------------------------
+```{r load-libraries, echo=FALSE, results="hide", message=FALSE, warning=FALSE}
+library(terra)
+library(ggplot2)
+library(dplyr)
+library(sf)
+```
+
+# Lab part 1: Oregon bee atlas data exploration 
+
+a. Import the OBA data.
+```{r}
+oba_df <- read.csv("OBA_2018-2023.csv")
+str(oba_df)
+```
+
+b. Find the columns related to genus and species and paste them together (with a space between) using the function paste(). Name the new column GenusSpecies.
+```{r}
+oba_df$GenusSpecies <- paste(oba_df$Genus, oba_df$Species, sep = " ")
+```
+
+c. Use `sort()` and `unique()` to print the unique values of GenusSpecies in alphabetical order.  How many species are there? 
+
+```{r}
+unique_genus_specs <- sort(unique(oba_df$GenusSpecies))
+length(unique_genus_specs)
+```
+
+Some specimens are not identified to species, only genus. How is this reflected in the data? 
+In two weeks we will learn how to clean this up using regular expressions. 
+
+It looks like we sometimes see it denoted like this:
+"Andrena "                         "Andrena  "                        "Andrena angustitarsata"          
+"Andrena astragali"                "Andrena chlorogaster"             "Andrena crataegi "  
+
+
+d. So many bees, so little time. Count up the occurrences of each bee species, and subset the data to bees that have been seen at least two times. 
+You can use the tidyverse or any other functions in R that you like. How many "species" are there? 
+
+```{r}
+species_counts <- oba_df %>%
+  group_by(Species) %>%        
+  summarize(count = n()) %>%
+  filter(count >= 2)
+
+nrow(species_counts)
+
+oba_df <- oba_df %>% filter(Species %in% species_counts$Species)
+head(oba_df)
+```
+
+e. Google a few bee names (that have been seen > 2 times) and find one with an a look that resonates with you.
+
+What is the name of your bee? Agapostemon virescens
+
+Import the photos into Rmarkdown below (hint: googling bee name "discover life" or "inat" can often get you a photo. Many bees will no have any photos :( 
+
+![Agapostemon virescens bee](Agapostemon-virescens-M-side-Mesa-Co.-Colorado_2014-01-08-14.56.08-ZS-PMax.jpeg)
+
+# Lab part 2: Plotting the distrubution of your spirit bee. 
+
+How that have chosen your spirit bee, we would like to plot it's distribution. What is the crs of the data? Annoyingly it is not described anywhere in the spreadsheet (always list your crs in your data) but it is the same as what inat uses because all bees have a georeferenced plant host. If the data is in lat long, it is "unprojected" so only a datum will be listed. 
+DATUM: WGS84, unprojected lat long. EPSG code: 4326. 
+
+
+```{r}
+crs("EPSG:4326")
+```
+
+a. Extract the X and Y locations for your species only from the data and create a spatial object. Don't forget to set the CRS! 
+Hint 1: consider what other data you would like to keep as attributes, for example what flower they were foraging on. Hint 2: Remember the lat is y and long is x. 
+Hint 3: You may want to rename the column names you can use, colnames() and reassign the names, since the ones in the oba data spreadsheet are really ugly. 
+
+```{r}
+# Get the data for just this bee
+selected_bee <- oba_df %>% filter(GenusSpecies == "Agapostemon virescens")
+
+# Grab the Lat and Lon from this bee's data, along with other fields we might want
+bees_lat_long <- selected_bee %>% 
+  select(Dec..Lat., Dec..Long., Genus, Species, Associated.plant)
+
+bees_lat_long <- bees_lat_long %>% 
+    rename(Latitude = Dec..Lat., Longitude = Dec..Long., Plant = Associated.plant)
+
+# Turn this into a spatial object with X = Long, Y = Lat
+spatial_bee_locs <- st_as_sf(bees_lat_long, coords = c("Longitude", "Latitude"), crs = 4326)
+spatial_bee_locs
+
+```
+
+b. Plot your exciting bee data!
+
+```{r plot-data-points}
+# Directly plot the spatial features
+ggplot(spatial_bee_locs) +
+  geom_sf() +
+  labs(title = "Agapostemon virescens Locations", x = "Longitude", y = "Latitude")
+```
+
+Not so exciting without some kind of background... 
+
+Luckily we can download basemaps into R using the map_data function in ggplot (among many others). There is an example for retrieving the Oregon county polygons. 
+
+```{r plot-or}
+or <- map_data("county", "oregon") %>%  
+  select(lon = long, lat, group, id = subregion)
+
+```
+
+c. Add your species's points to your choice or an Oregon basemap. 
+
+```{r plot-data-points-basemap}
+library(ggspatial)
+
+# Plot the polygon (oregon), then plot the spatial fetaures (bee locations) on top
+ggplot(spatial_bee_locs) +
+  geom_polygon(data = or, aes(x = lon, y = lat, group = group), fill = "lightgreen", color = "darkgreen") +
+  geom_sf() +
+  labs(title = "Agapostemon virescens Locations", x = "Longitude", y = "Latitude")
+
+```
+# Lab part 3: Cartography
+
+a. Here is your moment to explore your cartographic skills. 
+1. Add another spatial layer relevant to your final project and tweek the Oregon map in anyway that is useful/visually appealing. You may need to crop that layer to the extent of your species's distribution. 
+2. Color your points according to some data attribute and add a legend (month collected, county, collector, associated plant, whatever you think is interesting). You may need to circle back to 2.1 to save
+additional attributes when you converted the dataframe to a spatial object. 
+3. Fine-tune your map: add a title, make sure the legend label makes sense, add a scale bar (google "add scale bar map ggplot" and choose your favorite package). All maps must always have a scale bar. You can add a N arrow as well, though some cartographers argue that is only necessary if N isn't at the top of the map.
+4. Write a figure caption for your map explaining any interesting trends you see. 
+5. Export you cropped layer to a .shp so you can use it again for your final project.
+6. Push this lab to your github repo (just the .Rmd, don't push the data!)
+
+```{r plot-creative}
+### Part 1: Add another spatial layer (fire layer for my project)
+  ## I will need to reproject the fire data to have the same CRS as the spatial bee data
+  ## Then turn fire data into a dataframe
+  ## I am then going to put the fire on the map with the bee data
+
+fire_raster <- rast("whiteriver_sbs/WhiteRiver_SBS_final.tif")
+fire_raster <- project(fire_raster, crs(spatial_bee_locs))
+
+fire_df <- as.data.frame(fire_raster, xy = TRUE, na.rm = TRUE)
+colnames(fire_df)[3] <- "FireIntensity"
+
+ggplot() +
+  geom_polygon(data = or, aes(x = lon, y = lat, group = group), fill = "lightgreen", color = "darkgreen") +
+    geom_sf(data = spatial_bee_locs, aes(color = Species), size = 3) + # Color bee points by Flower found on
+  geom_raster(data = fire_df, aes(x = x, y = y, fill = FireIntensity)) +
+  labs(title = "Agapostemon virescens Locations with Fire Data", 
+       subtitle = "Fire Intensity and Bee Distribution",
+       x = "Longitude", y = "Latitude") +
+  annotation_scale(location = "bl", width_hint = 0.2) + # Add a scale bar
+  annotation_north_arrow(location = "tr", which_north = "true", 
+                         style = north_arrow_fancy_orienteering)
+
+
+### Part 2: Color the points according to some attribute
+  ## Fire intensity is the color
+  ## Genus is another color for the points
+
+### Part 3: Add a title, make sure the legend makes sense, add a scale bar to the map
+  ## Done
+
+### Part 4: Write a figure caption explaining interesting trends
+  ## Subtitle
+
+### Part 5: Export your cropped layer to a .shp for later use
+  ## I can't do this part because the fire doesn't overlap with any occurences of bees
+st_write(spatial_bee_locs, "bee_locations.shp", delete_layer = TRUE)
+
+# This is how I would crop it if I had more fire data and there were overlap
+fire_cropped <- crop(fire_raster, ext(spatial_bee_locs))  # `ext()` gets the extent of the bee spatial object
+fire_masked <- mask(fire_cropped, spatial_bee_locs)       # Mask to only include fire data within bee locations
+
+# Save the cropped fire raster if useful
+writeRaster(fire_cropped, "cropped_fire_raster.tif", overwrite = TRUE)
+
+### Part 6: Push the lab to github
+
+```
+
+We are looking forward to seeing the maps you create! 
+
+# Lab part 4: Spatial summary statistics
+ For your final projects, you will likely need to come up with summary statistics that describes the areas around where bees are captured. 
+a. Using the distribution of your chosen bee and the spatial layer you imported in 2.6, extract a meaningful summary statistics from your spatial layer within a buffer of 500, 750 1000 km.
+b. Create a plot that illustrates this summary data (box plot, barplot, scatter plot, historgram). 
+c. Create a map of your cropped spatial data.
+
+```{r buffers}
+# Assuming fire_raster is already a SpatRaster object
+# Convert fire raster to a vector (polygon)
+fire_raster_polygons <- as.polygons(fire_raster)
+
+# Apply buffer directly using terra's buffer function (works on SpatVector objects)
+buffer_500m <- buffer(fire_raster_polygons, width = 50000)
+buffer_750m <- buffer(fire_raster_polygons, width = 75000)
+buffer_1000m <- buffer(fire_raster_polygons, width = 100000)
+
+# Convert the buffered SpatVector objects to sf for ggplot
+buffer_500m_sf <- st_as_sf(buffer_500m)
+buffer_750m_sf <- st_as_sf(buffer_750m)
+buffer_1000m_sf <- st_as_sf(buffer_1000m)
+
+# Visualize the buffers with bee locations and fire data
+ggplot() +
+  geom_polygon(data = or, aes(x = lon, y = lat, group = group), 
+               fill = "lightgreen", color = "darkgreen") +
+  geom_sf(data = spatial_bee_locs, aes(color = Species), size = 3) +  # Bee locations
+  geom_raster(data = fire_df, aes(x = x, y = y, fill = FireIntensity)) +  # Fire raster
+  geom_sf(data = buffer_1000m_sf, aes(fill = "1000m buffer"), alpha = 0.3) +  # 1000m buffer
+  geom_sf(data = buffer_750m_sf, aes(fill = "750m buffer"), alpha = 0.3) +  # 750m buffer
+  geom_sf(data = buffer_500m_sf, aes(fill = "500m buffer"), alpha = 0.3) +  # 500m buffer
+  labs(title = "Agapostemon virescens Locations with Fire Data", 
+       subtitle = "Fire Intensity and Bee Distribution",
+       x = "Longitude", y = "Latitude") +
+  annotation_scale(location = "bl", width_hint = 0.2) +
+  annotation_north_arrow(location = "tr", which_north = "true", 
+                         style = north_arrow_fancy_orienteering)
+
+
+### Get some summary stats
+# Extract bee locations within each buffer (spatial intersection)
+bees_in_500m <- st_intersection(spatial_bee_locs, buffer_500m_sf)
+bees_in_750m <- st_intersection(spatial_bee_locs, buffer_750m_sf)
+bees_in_1000m <- st_intersection(spatial_bee_locs, buffer_1000m_sf)
+
+# Calculate summary statistics (e.g., count of bee species within each buffer zone)
+summary_stats <- tibble(
+  buffer_size = c("500m", "750m", "1000m"),
+  bee_count = c(nrow(bees_in_500m), nrow(bees_in_750m), nrow(bees_in_1000m))
+)
+
+# Plotting the summary statistics (e.g., bar plot of bee counts in each buffer)
+ggplot(summary_stats, aes(x = buffer_size, y = bee_count, fill = buffer_size)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "Bee Count within Different Buffer Zones",
+       x = "Buffer Size", y = "Bee Count")
+```
+
+My summary statistics are only about the bees captured in that buffer region because there are no bees in my fire's region. In my actual project, I would have several sets of fire data combined, and I wouldn't be subsetting the bee data by one species, so there would be overlap, and I could get meaningful statistics about the bees in certain severity regions.
